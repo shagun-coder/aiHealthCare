@@ -1,5 +1,4 @@
 
-import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
@@ -12,15 +11,15 @@ void main() {
 // -----------------------------------------------------------------------------
 
 class VitalsColors {
-  static const background = Color(0xFF080C0D);
-  static const surface = Color(0xFF0D1415);
-  static const surface2 = Color(0xFF111A1B);
-  static const border = Color(0xFF314044);
-  static const ivory = Color(0xFFF2E5C8);
-  static const gold = Color(0xFFD7B77A);
-  static const sage = Color(0xFF9EBB9A);
-  static const muted = Color(0xFF98A5A5);
-  static const warning = Color(0xFFE1B66B);
+  static const background = Color(0xFF0D1720);
+  static const surface = Color(0xFF14232D);
+  static const surface2 = Color(0xFF1B303B);
+  static const border = Color(0xFF35505C);
+  static const ivory = Color(0xFFEAF1F2);
+  static const gold = Color(0xFFB7C7CC);
+  static const sage = Color(0xFF9DBBB5);
+  static const muted = Color(0xFF9AAEB5);
+  static const warning = Color(0xFFE0B36A);
 }
 
 class VitalsApp extends StatelessWidget {
@@ -56,21 +55,13 @@ class VitalsSnapshot {
   final int heartRate;
   final int spo2;
   final double temperature;
-  final int respiratoryRate;
   final int hrv;
-  final double sleepHours;
-  final int stress;
-  final int activity;
 
   const VitalsSnapshot({
     required this.heartRate,
     required this.spo2,
     required this.temperature,
-    required this.respiratoryRate,
     required this.hrv,
-    required this.sleepHours,
-    required this.stress,
-    required this.activity,
   });
 }
 
@@ -78,15 +69,11 @@ class PersonalBaseline {
   final double heartRate;
   final double temperature;
   final double hrv;
-  final double respiratoryRate;
-  final double sleepHours;
 
   const PersonalBaseline({
     required this.heartRate,
     required this.temperature,
     required this.hrv,
-    required this.respiratoryRate,
-    required this.sleepHours,
   });
 }
 
@@ -102,17 +89,17 @@ class PersonalBaseline {
 // The UI never needs to know which inference engine is being used.
 // -----------------------------------------------------------------------------
 
-abstract class OnDeviceWellnessEngine {
-  Future<WellnessPrediction> predict({
+abstract class OnDeviceRiskEngine {
+  Future<RiskPrediction> predict({
     required VitalsSnapshot current,
     required PersonalBaseline baseline,
     required List<VitalsSnapshot> history,
   });
 }
 
-class DemoOnDeviceWellnessEngine implements OnDeviceWellnessEngine {
+class DemoOnDeviceRiskEngine implements OnDeviceRiskEngine {
   @override
-  Future<WellnessPrediction> predict({
+  Future<RiskPrediction> predict({
     required VitalsSnapshot current,
     required PersonalBaseline baseline,
     required List<VitalsSnapshot> history,
@@ -120,26 +107,24 @@ class DemoOnDeviceWellnessEngine implements OnDeviceWellnessEngine {
     // Simulate a tiny hardware inference delay.
     await Future<void>.delayed(const Duration(milliseconds: 180));
 
-    double score = 78;
+    double score = 22;
 
     final hrDelta = (current.heartRate - baseline.heartRate).abs();
     final hrvDelta = current.hrv - baseline.hrv;
 
-    if (hrDelta > 12) score -= 7;
-    if (hrvDelta > 5) score += 4;
-    if (hrvDelta < -10) score -= 8;
-    if (current.stress > 65) score -= 7;
-    if (current.sleepHours >= baseline.sleepHours) score += 4;
-    if (current.sleepHours < baseline.sleepHours - 1) score -= 8;
+    if (hrDelta > 12) score += 24;
+    if (hrvDelta < -10) score += 18;
+    if (current.spo2 < 95) score += 32;
+    if ((current.temperature - baseline.temperature).abs() > .5) score += 20;
 
     score = score.clamp(0, 100);
 
     final confidence = 0.78 + math.min(history.length / 100, 0.15);
 
-    return WellnessPrediction(
+    return RiskPrediction(
       score: score.round(),
       confidence: confidence,
-      headline: score >= 75 ? 'Your wellness is on track' : 'Your body may need recovery',
+          headline: score < 35 ? 'No immediate warning' : score < 65 ? 'Early warning active' : 'Urgent warning active',
       factors: [
         PredictionFactor(
           label: 'Heart-rate pattern',
@@ -149,19 +134,14 @@ class DemoOnDeviceWellnessEngine implements OnDeviceWellnessEngine {
         PredictionFactor(
           label: 'Heart-rate variability',
           positive: current.hrv >= baseline.hrv,
-          detail: current.hrv >= baseline.hrv ? 'Recovery signal is stable' : 'Lower than your baseline',
+          detail: current.hrv >= baseline.hrv ? 'Within your normal range' : 'Lower than your baseline',
         ),
         PredictionFactor(
-          label: 'Sleep recovery',
-          positive: current.sleepHours >= baseline.sleepHours - 0.5,
-          detail: current.sleepHours >= baseline.sleepHours - 0.5
-              ? 'Supporting recovery'
-              : 'Below your usual duration',
-        ),
-        PredictionFactor(
-          label: 'Stress indicators',
-          positive: current.stress < 55,
-          detail: current.stress < 55 ? 'Low today' : 'Slightly elevated',
+          label: 'Oxygen and temperature',
+          positive: current.spo2 >= 95 && (current.temperature - baseline.temperature).abs() <= .5,
+          detail: current.spo2 >= 95 && (current.temperature - baseline.temperature).abs() <= .5
+              ? 'No threshold crossing detected'
+              : 'Review this signal promptly',
         ),
       ],
     );
@@ -180,13 +160,13 @@ class PredictionFactor {
   });
 }
 
-class WellnessPrediction {
+class RiskPrediction {
   final int score;
   final double confidence;
   final String headline;
   final List<PredictionFactor> factors;
 
-  const WellnessPrediction({
+  const RiskPrediction({
     required this.score,
     required this.confidence,
     required this.headline,
@@ -199,41 +179,35 @@ class WellnessPrediction {
 // -----------------------------------------------------------------------------
 
 class VitalsController extends ChangeNotifier {
-  VitalsController({OnDeviceWellnessEngine? engine})
-      : engine = engine ?? DemoOnDeviceWellnessEngine();
+  VitalsController({OnDeviceRiskEngine? engine})
+      : engine = engine ?? DemoOnDeviceRiskEngine();
 
-  final OnDeviceWellnessEngine engine;
+  final OnDeviceRiskEngine engine;
 
   final PersonalBaseline baseline = const PersonalBaseline(
     heartRate: 68,
     temperature: 36.6,
     hrv: 52,
-    respiratoryRate: 14,
-    sleepHours: 7.5,
   );
 
   VitalsSnapshot current = const VitalsSnapshot(
     heartRate: 72,
     spo2: 98,
     temperature: 36.6,
-    respiratoryRate: 14,
     hrv: 48,
-    sleepHours: 7.7,
-    stress: 31,
-    activity: 62,
   );
 
   final List<VitalsSnapshot> history = const [
-    VitalsSnapshot(heartRate: 67, spo2: 98, temperature: 36.6, respiratoryRate: 14, hrv: 55, sleepHours: 7.2, stress: 28, activity: 55),
-    VitalsSnapshot(heartRate: 70, spo2: 97, temperature: 36.7, respiratoryRate: 15, hrv: 51, sleepHours: 7.6, stress: 35, activity: 61),
-    VitalsSnapshot(heartRate: 68, spo2: 98, temperature: 36.5, respiratoryRate: 14, hrv: 57, sleepHours: 7.8, stress: 24, activity: 70),
-    VitalsSnapshot(heartRate: 71, spo2: 98, temperature: 36.6, respiratoryRate: 14, hrv: 54, sleepHours: 7.4, stress: 33, activity: 66),
-    VitalsSnapshot(heartRate: 69, spo2: 98, temperature: 36.6, respiratoryRate: 13, hrv: 56, sleepHours: 7.9, stress: 27, activity: 72),
-    VitalsSnapshot(heartRate: 73, spo2: 97, temperature: 36.7, respiratoryRate: 15, hrv: 49, sleepHours: 7.1, stress: 42, activity: 58),
-    VitalsSnapshot(heartRate: 72, spo2: 98, temperature: 36.6, respiratoryRate: 14, hrv: 48, sleepHours: 7.7, stress: 31, activity: 62),
+    VitalsSnapshot(heartRate: 67, spo2: 98, temperature: 36.6, hrv: 55),
+    VitalsSnapshot(heartRate: 70, spo2: 97, temperature: 36.7, hrv: 51),
+    VitalsSnapshot(heartRate: 68, spo2: 98, temperature: 36.5, hrv: 57),
+    VitalsSnapshot(heartRate: 71, spo2: 98, temperature: 36.6, hrv: 54),
+    VitalsSnapshot(heartRate: 69, spo2: 98, temperature: 36.6, hrv: 56),
+    VitalsSnapshot(heartRate: 73, spo2: 97, temperature: 36.7, hrv: 49),
+    VitalsSnapshot(heartRate: 72, spo2: 98, temperature: 36.6, hrv: 48),
   ];
 
-  WellnessPrediction? prediction;
+  RiskPrediction? prediction;
   bool loadingPrediction = false;
 
   Future<void> refreshPrediction() async {
@@ -256,11 +230,7 @@ class VitalsController extends ChangeNotifier {
       heartRate: 68 + random.nextInt(9),
       spo2: 97 + random.nextInt(2),
       temperature: 36.4 + random.nextDouble() * .5,
-      respiratoryRate: 13 + random.nextInt(4),
       hrv: 46 + random.nextInt(16),
-      sleepHours: current.sleepHours,
-      stress: 20 + random.nextInt(40),
-      activity: current.activity,
     );
     notifyListeners();
     refreshPrediction();
@@ -329,7 +299,7 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       const SizedBox(height: 8),
                       const Text(
-                        'FUTURE PREDICTIONS.\nPERSONALIZED.',
+                        'EARLY SIGNALS.\nPRIVATE BY DESIGN.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: VitalsColors.gold,
@@ -425,6 +395,7 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   final controller = VitalsController();
   int index = 0;
+  bool wearableConnected = true;
 
   final pages = const [
     DashboardPage(),
@@ -464,14 +435,6 @@ class _HomeShellState extends State<HomeShell> {
               NavigationDestination(icon: Icon(Icons.grid_view_outlined), selectedIcon: Icon(Icons.grid_view), label: 'More'),
             ],
           ),
-          floatingActionButton: index == 0
-              ? FloatingActionButton.small(
-                  onPressed: controller.simulateSensorReading,
-                  backgroundColor: VitalsColors.ivory,
-                  foregroundColor: Colors.black,
-                  child: const Icon(Icons.sync),
-                )
-              : null,
         );
       },
     );
@@ -499,10 +462,9 @@ class DashboardPage extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(18, 4, 18, 20),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
-                BaselineHeartCard(
-                  value: v.heartRate,
-                  baseline: c.baseline.heartRate,
-                ),
+                RiskStatusCard(prediction: c.prediction),
+                const SizedBox(height: 12),
+                WearableStatusCard(connected: state.wearableConnected),
                 const SizedBox(height: 12),
                 Row(
                   children: [
@@ -514,9 +476,7 @@ class DashboardPage extends StatelessWidget {
                 const SizedBox(height: 10),
                 Row(
                   children: [
-                    Expanded(child: MetricCard(icon: Icons.air, label: 'Breaths', value: '${v.respiratoryRate}', baseline: 'per min')),
-                    const SizedBox(width: 10),
-                    Expanded(child: MetricCard(icon: Icons.nights_stay_outlined, label: 'Sleep', value: '${v.sleepHours.toStringAsFixed(1)}h', baseline: 'Last night')),
+                    Expanded(child: MetricCard(icon: Icons.favorite_outline, label: 'Heart rate', value: '${v.heartRate} bpm', baseline: 'Baseline ${c.baseline.heartRate.round()} bpm')),
                   ],
                 ),
                 const SizedBox(height: 14),
@@ -532,16 +492,17 @@ class DashboardPage extends StatelessWidget {
                         difference: v.hrv - c.baseline.hrv,
                       ),
                       BaselineLine(
-                        label: 'Stress',
-                        value: '${v.stress}%',
-                        difference: v.stress - 35,
-                        invert: true,
+                        label: 'SpO₂',
+                        value: '${v.spo2}%',
+                        difference: v.spo2 - 97,
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 14),
                 AiPreviewCard(prediction: c.prediction),
+                const SizedBox(height: 14),
+                EarlyWarningCard(current: v, prediction: c.prediction),
               ]),
             ),
           ),
@@ -567,7 +528,7 @@ class InsightPage extends StatelessWidget {
     return SafeArea(
       child: CustomScrollView(
         slivers: [
-          const SliverToBoxAdapter(child: PageHeader(title: 'AI Insight', subtitle: 'On-device prediction')),
+          const SliverToBoxAdapter(child: PageHeader(title: 'AI Insight', subtitle: 'On-device risk analysis')),
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(18, 6, 18, 24),
             sliver: SliverList(
@@ -639,14 +600,8 @@ class InsightPage extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 14),
-                OutlinedButton.icon(
-                  onPressed: c.refreshPrediction,
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Re-run prediction'),
-                ),
-                const SizedBox(height: 10),
                 const Text(
-                  'Wellness prediction is informational and is not a medical diagnosis.',
+                  'Risk status is informational and is not a medical diagnosis.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: VitalsColors.muted, fontSize: 10),
                 ),
@@ -713,15 +668,7 @@ class _TrendsPageState extends State<TrendsPage> {
                   max: 70,
                 ),
                 const SizedBox(height: 12),
-                TrendCard(
-                  title: 'Sleep',
-                  average: '${c.baseline.sleepHours.toStringAsFixed(1)} h',
-                  icon: Icons.nights_stay_outlined,
-                  values: c.history.map((e) => e.sleepHours).toList(),
-                  min: 0,
-                  max: 10,
-                  bars: true,
-                ),
+                AiLearningCard(current: c.current, baseline: c.baseline),
               ]),
             ),
           ),
@@ -820,6 +767,15 @@ class PageHeader extends StatelessWidget {
             ],
           ),
           const Spacer(),
+          IconButton(
+            tooltip: 'Notifications',
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('No new high-risk alerts. Monitoring is active.')),
+              );
+            },
+            icon: const Icon(Icons.notifications_none, color: VitalsColors.ivory),
+          ),
           const Icon(Icons.account_circle_outlined, color: VitalsColors.ivory),
         ],
       ),
@@ -917,6 +873,97 @@ class VitalsTextField extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           borderSide: const BorderSide(color: VitalsColors.gold),
         ),
+      ),
+    );
+  }
+}
+
+class RiskStatusCard extends StatelessWidget {
+  final RiskPrediction? prediction;
+
+  const RiskStatusCard({super.key, required this.prediction});
+
+  @override
+  Widget build(BuildContext context) {
+    final score = prediction?.score;
+    final label = score == null
+        ? 'Monitoring signals'
+        : score < 35
+            ? 'Low current risk'
+            : score < 65
+                ? 'Review your signals'
+                : 'Elevated risk';
+    final color = score == null
+        ? VitalsColors.muted
+        : score < 35
+            ? VitalsColors.sage
+            : VitalsColors.warning;
+
+    return SectionCard(
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+      child: Row(
+        children: [
+          Container(
+            width: 58,
+            height: 58,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: color, width: 2),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              score == null ? '--' : '$score',
+              style: const TextStyle(fontFamily: 'Georgia', fontSize: 20, color: VitalsColors.ivory),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Current risk status', style: TextStyle(color: VitalsColors.muted, fontSize: 11)),
+                const SizedBox(height: 4),
+                Text(label, style: TextStyle(fontFamily: 'Georgia', fontSize: 21, color: color)),
+                const SizedBox(height: 4),
+                Text(
+                  score == null ? 'Waiting for the latest wearable signal.' : 'Based on your baseline and live signals.',
+                  style: const TextStyle(color: VitalsColors.muted, fontSize: 10),
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.shield_outlined, color: VitalsColors.gold),
+        ],
+      ),
+    );
+  }
+}
+
+class WearableStatusCard extends StatelessWidget {
+  final bool connected;
+
+  const WearableStatusCard({super.key, required this.connected});
+
+  @override
+  Widget build(BuildContext context) {
+    return SectionCard(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
+        children: [
+          Icon(Icons.watch_outlined, color: connected ? VitalsColors.sage : VitalsColors.warning),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Wearable connection', style: TextStyle(color: VitalsColors.muted, fontSize: 10)),
+                const SizedBox(height: 3),
+                Text(connected ? 'Connected · live monitoring active' : 'Disconnected · reconnect to continue', style: const TextStyle(color: VitalsColors.ivory, fontSize: 12)),
+              ],
+            ),
+          ),
+          Container(width: 8, height: 8, decoration: BoxDecoration(shape: BoxShape.circle, color: connected ? VitalsColors.sage : VitalsColors.warning)),
+        ],
       ),
     );
   }
@@ -1063,7 +1110,7 @@ class BaselineLine extends StatelessWidget {
 }
 
 class AiPreviewCard extends StatelessWidget {
-  final WellnessPrediction? prediction;
+  final RiskPrediction? prediction;
 
   const AiPreviewCard({super.key, required this.prediction});
 
@@ -1082,8 +1129,8 @@ class AiPreviewCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             prediction == null
-                ? 'Your on-device AI is comparing today against your personal baseline.'
-                : 'Tomorrow wellness prediction: ${prediction!.score}%',
+                ? 'Your on-device AI is checking live signals against your personal baseline.'
+                : 'Risk score: ${prediction!.score}/100 · ${(prediction!.confidence * 100).round()}% confidence',
             style: const TextStyle(color: VitalsColors.muted, fontSize: 11, height: 1.5),
           ),
           const SizedBox(height: 14),
@@ -1095,6 +1142,101 @@ class AiPreviewCard extends StatelessWidget {
               backgroundColor: VitalsColors.border,
               valueColor: const AlwaysStoppedAnimation(VitalsColors.sage),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+class EarlyWarningCard extends StatelessWidget {
+  final VitalsSnapshot current;
+  final RiskPrediction? prediction;
+
+  const EarlyWarningCard({super.key, required this.current, required this.prediction});
+
+  @override
+  Widget build(BuildContext context) {
+    final status = prediction == null
+        ? 'Waiting for live data'
+        : prediction!.score >= 65
+            ? 'Immediate review recommended'
+            : prediction!.score >= 35
+                ? 'Keep monitoring closely'
+                : 'No immediate warning';
+    final statusColor = prediction == null
+        ? VitalsColors.muted
+        : prediction!.score >= 65
+            ? VitalsColors.warning
+            : VitalsColors.sage;
+
+    return SectionCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.notification_important_outlined, color: VitalsColors.warning),
+              const SizedBox(width: 8),
+              const Expanded(child: SectionTitle(icon: Icons.shield_outlined, title: 'Early warning')),
+              Text('LIVE', style: TextStyle(color: statusColor, fontSize: 9, letterSpacing: 1.3)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(status, style: TextStyle(fontFamily: 'Georgia', fontSize: 20, color: statusColor)),
+          const SizedBox(height: 6),
+          const Text(
+            'Designed to keep monitoring available when conditions change or infrastructure is disrupted.',
+            style: TextStyle(color: VitalsColors.muted, fontSize: 11, height: 1.5),
+          ),
+          const SizedBox(height: 14),
+          WarningSignalRow(
+            icon: Icons.device_thermostat_outlined,
+            label: 'Heat exposure signal',
+            detail: current.temperature > 37.2 ? 'Review current temperature' : 'No threshold crossing',
+            warning: current.temperature > 37.2,
+          ),
+          WarningSignalRow(
+            icon: Icons.air_outlined,
+            label: 'Pollution event readiness',
+            detail: 'Ready for an external air-quality feed',
+            warning: false,
+          ),
+          WarningSignalRow(
+            icon: Icons.water_outlined,
+            label: 'Flood continuity',
+            detail: 'On-device monitoring remains available offline',
+            warning: false,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class WarningSignalRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String detail;
+  final bool warning;
+
+  const WarningSignalRow({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.detail,
+    required this.warning,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          Icon(icon, size: 17, color: warning ? VitalsColors.warning : VitalsColors.sage),
+          const SizedBox(width: 10),
+          Expanded(child: Text(label, style: const TextStyle(color: VitalsColors.ivory, fontSize: 11))),
+          Text(detail, style: TextStyle(color: warning ? VitalsColors.warning : VitalsColors.muted, fontSize: 10)),
         ],
       ),
     );
@@ -1131,7 +1273,10 @@ class PredictionGauge extends StatelessWidget {
                 '$score%',
                 style: const TextStyle(fontFamily: 'Georgia', fontSize: 37, color: VitalsColors.ivory),
               ),
-              const Text('HIGH WELLNESS', style: TextStyle(fontSize: 9, letterSpacing: 1.4, color: VitalsColors.gold)),
+              Text(
+                score < 35 ? 'NO WARNING' : score < 65 ? 'EARLY WARNING' : 'URGENT',
+                style: const TextStyle(fontSize: 9, letterSpacing: 1.4, color: VitalsColors.gold),
+              ),
             ],
           ),
         ],
@@ -1213,6 +1358,55 @@ class TrendCard extends StatelessWidget {
             width: double.infinity,
             child: CustomPaint(
               painter: MiniChartPainter(values: values, min: min, max: max, bars: bars),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class AiLearningCard extends StatelessWidget {
+  final VitalsSnapshot current;
+  final PersonalBaseline baseline;
+
+  const AiLearningCard({super.key, required this.current, required this.baseline});
+
+  @override
+  Widget build(BuildContext context) {
+    final hrvDelta = current.hrv - baseline.hrv;
+    final heartRateDelta = current.heartRate - baseline.heartRate;
+    final message = hrvDelta < -5
+      ? 'Your HRV is below your personal baseline. Review this signal and keep monitoring if conditions around you become difficult.'
+        : heartRateDelta.abs() > 6
+        ? 'Your heart rate is outside its usual range. Keep the wearable connected and review the next live reading.'
+        : 'Your current signals are close to your usual pattern. Learn how this baseline can help identify an early change.';
+
+    return SectionCard(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.auto_awesome_outlined, color: VitalsColors.gold),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('AI explains your pattern', style: TextStyle(fontFamily: 'Georgia', fontSize: 17, color: VitalsColors.ivory)),
+                const SizedBox(height: 7),
+                Text(message, style: const TextStyle(color: VitalsColors.muted, fontSize: 11, height: 1.5)),
+                const SizedBox(height: 10),
+                TextButton.icon(
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Personal learning guidance will use your future readings.')),
+                    );
+                  },
+                  icon: const Icon(Icons.menu_book_outlined, size: 16),
+                  label: const Text('Learn more about your signals'),
+                  style: TextButton.styleFrom(foregroundColor: VitalsColors.gold, padding: EdgeInsets.zero),
+                ),
+              ],
             ),
           ),
         ],

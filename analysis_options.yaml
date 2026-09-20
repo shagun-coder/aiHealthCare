@@ -21,3 +21,4 @@ analyzer:
   exclude:
     - build/**
     - windows/**
+    - web/**
