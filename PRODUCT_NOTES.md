@@ -19,6 +19,7 @@
 5. Trends over 7/30/90 days.
 6. Wearable connection, early warnings, notifications, security, and AI personalization settings.
 7. Monitoring continuity during heat waves, pollution events, floods, and unreliable connectivity.
+8. Environment context alongside physiological trends so external conditions can explain signal changes.
 
 ## AI UX
 

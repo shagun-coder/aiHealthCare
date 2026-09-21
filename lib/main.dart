@@ -77,6 +77,20 @@ class PersonalBaseline {
   });
 }
 
+class EnvironmentSnapshot {
+  final int airQualityIndex;
+  final double heatIndex;
+  final bool floodAlert;
+  final bool signalAvailable;
+
+  const EnvironmentSnapshot({
+    required this.airQualityIndex,
+    required this.heatIndex,
+    required this.floodAlert,
+    required this.signalAvailable,
+  });
+}
+
 // -----------------------------------------------------------------------------
 // ON-DEVICE AI INTEGRATION POINT
 //
@@ -205,6 +219,16 @@ class VitalsController extends ChangeNotifier {
     VitalsSnapshot(heartRate: 69, spo2: 98, temperature: 36.6, hrv: 56),
     VitalsSnapshot(heartRate: 73, spo2: 97, temperature: 36.7, hrv: 49),
     VitalsSnapshot(heartRate: 72, spo2: 98, temperature: 36.6, hrv: 48),
+  ];
+
+  final List<EnvironmentSnapshot> environmentHistory = const [
+    EnvironmentSnapshot(airQualityIndex: 82, heatIndex: 32.1, floodAlert: false, signalAvailable: true),
+    EnvironmentSnapshot(airQualityIndex: 96, heatIndex: 33.0, floodAlert: false, signalAvailable: true),
+    EnvironmentSnapshot(airQualityIndex: 118, heatIndex: 34.2, floodAlert: false, signalAvailable: true),
+    EnvironmentSnapshot(airQualityIndex: 132, heatIndex: 35.1, floodAlert: true, signalAvailable: true),
+    EnvironmentSnapshot(airQualityIndex: 106, heatIndex: 34.7, floodAlert: true, signalAvailable: false),
+    EnvironmentSnapshot(airQualityIndex: 91, heatIndex: 33.5, floodAlert: false, signalAvailable: true),
+    EnvironmentSnapshot(airQualityIndex: 88, heatIndex: 32.8, floodAlert: false, signalAvailable: true),
   ];
 
   RiskPrediction? prediction;
@@ -667,6 +691,8 @@ class _TrendsPageState extends State<TrendsPage> {
                   min: 30,
                   max: 70,
                 ),
+                const SizedBox(height: 12),
+                EnvironmentTrendCard(history: c.environmentHistory),
                 const SizedBox(height: 12),
                 AiLearningCard(current: c.current, baseline: c.baseline),
               ]),
@@ -1360,6 +1386,103 @@ class TrendCard extends StatelessWidget {
               painter: MiniChartPainter(values: values, min: min, max: max, bars: bars),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class EnvironmentTrendCard extends StatelessWidget {
+  final List<EnvironmentSnapshot> history;
+
+  const EnvironmentTrendCard({super.key, required this.history});
+
+  @override
+  Widget build(BuildContext context) {
+    final latest = history.last;
+    final floodEvents = history.where((entry) => entry.floodAlert).length;
+    final offlineReadings = history.where((entry) => !entry.signalAvailable).length;
+
+    return SectionCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SectionTitle(icon: Icons.public_outlined, title: 'Environment context'),
+          const SizedBox(height: 6),
+          const Text(
+            'External conditions help explain changes in your live signals.',
+            style: TextStyle(color: VitalsColors.muted, fontSize: 11, height: 1.4),
+          ),
+          const SizedBox(height: 14),
+          EnvironmentMetricRow(
+            icon: Icons.air_outlined,
+            label: 'Air quality index',
+            value: '${latest.airQualityIndex}',
+            detail: latest.airQualityIndex >= 100 ? 'Elevated' : 'Moderate',
+            warning: latest.airQualityIndex >= 100,
+          ),
+          EnvironmentMetricRow(
+            icon: Icons.thermostat_outlined,
+            label: 'Heat index',
+            value: '${latest.heatIndex.toStringAsFixed(1)}°',
+            detail: latest.heatIndex >= 35 ? 'High exposure' : 'Watch conditions',
+            warning: latest.heatIndex >= 35,
+          ),
+          EnvironmentMetricRow(
+            icon: Icons.water_outlined,
+            label: 'Flood alerts in range',
+            value: '$floodEvents',
+            detail: offlineReadings == 0 ? 'Connectivity stable' : '$offlineReadings offline reading',
+            warning: floodEvents > 0 || offlineReadings > 0,
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 78,
+            width: double.infinity,
+            child: CustomPaint(
+              painter: MiniChartPainter(
+                values: history.map((entry) => entry.airQualityIndex.toDouble()).toList(),
+                min: 50,
+                max: 150,
+                bars: true,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class EnvironmentMetricRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final String detail;
+  final bool warning;
+
+  const EnvironmentMetricRow({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.detail,
+    required this.warning,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = warning ? VitalsColors.warning : VitalsColors.sage;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          Icon(icon, size: 17, color: color),
+          const SizedBox(width: 10),
+          Expanded(child: Text(label, style: const TextStyle(color: VitalsColors.ivory, fontSize: 11))),
+          Text(value, style: const TextStyle(color: VitalsColors.ivory, fontSize: 12)),
+          const SizedBox(width: 8),
+          SizedBox(width: 96, child: Text(detail, textAlign: TextAlign.right, style: TextStyle(color: color, fontSize: 10))),
         ],
       ),
     );

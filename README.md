@@ -33,6 +33,7 @@ flutter run -d <device-id>
 - On-device risk analysis with confidence and explainable factors.
 - Notification affordance for high-risk monitoring alerts.
 - Trends for heart rate and HRV over 7, 30, and 90 day views.
+- Environment context in Trends: air-quality history, heat index, flood alerts, and offline-reading continuity.
 - Personalized AI explanation below Trends that encourages the individual to learn more about their own signals.
 - Settings entry points for account, security, device, notifications, and AI personalization.
 
