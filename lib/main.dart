@@ -419,14 +419,17 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   final controller = VitalsController();
   int index = 0;
+  bool dayMode = false;
   bool wearableConnected = true;
 
   final pages = const [
     DashboardPage(),
     TrendsPage(),
-    InsightPage(),
+    AlertsPage(),
     SettingsPage(),
   ];
+
+  void toggleDayMode() => setState(() => dayMode = !dayMode);
 
   @override
   void initState() {
@@ -445,7 +448,7 @@ class _HomeShellState extends State<HomeShell> {
     return AnimatedBuilder(
       animation: controller,
       builder: (context, _) {
-        return Scaffold(
+        final content = Scaffold(
           body: pages[index],
           bottomNavigationBar: NavigationBar(
             selectedIndex: index,
@@ -453,13 +456,25 @@ class _HomeShellState extends State<HomeShell> {
             backgroundColor: VitalsColors.surface,
             indicatorColor: VitalsColors.border.withOpacity(.55),
             destinations: const [
-              NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Home'),
+              NavigationDestination(icon: Icon(Icons.monitor_heart_outlined), selectedIcon: Icon(Icons.monitor_heart), label: 'Vitals'),
               NavigationDestination(icon: Icon(Icons.bar_chart_outlined), selectedIcon: Icon(Icons.bar_chart), label: 'Trends'),
-              NavigationDestination(icon: Icon(Icons.auto_awesome_outlined), selectedIcon: Icon(Icons.auto_awesome), label: 'AI Insight'),
-              NavigationDestination(icon: Icon(Icons.grid_view_outlined), selectedIcon: Icon(Icons.grid_view), label: 'More'),
+              NavigationDestination(icon: Icon(Icons.warning_amber_outlined), selectedIcon: Icon(Icons.warning_amber), label: 'Alerts'),
+              NavigationDestination(icon: Icon(Icons.settings_outlined), selectedIcon: Icon(Icons.settings), label: 'Settings'),
             ],
           ),
         );
+
+        return dayMode
+            ? ColorFiltered(
+                colorFilter: const ColorFilter.matrix([
+                  -.80, -.10, -.10, 0, 255,
+                  -.65, -.25, -.10, 0, 250,
+                  -.45, -.25, -.30, 0, 242,
+                  0, 0, 0, 1, 0,
+                ]),
+                child: content,
+              )
+            : content;
       },
     );
   }
@@ -481,7 +496,7 @@ class DashboardPage extends StatelessWidget {
     return SafeArea(
       child: CustomScrollView(
         slivers: [
-          const SliverToBoxAdapter(child: PageHeader(title: 'Vitals', subtitle: 'Today')),
+          const SliverToBoxAdapter(child: PageHeader(title: 'Vitals', subtitle: 'Continuous monitoring')),
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(18, 4, 18, 20),
             sliver: SliverList(
@@ -490,17 +505,21 @@ class DashboardPage extends StatelessWidget {
                 const SizedBox(height: 12),
                 WearableStatusCard(connected: state.wearableConnected),
                 const SizedBox(height: 12),
+                const RealTimeTrackerCard(),
+                const SizedBox(height: 12),
                 Row(
                   children: [
                     Expanded(child: MetricCard(icon: Icons.water_drop_outlined, label: 'SpO₂', value: '${v.spo2}%', baseline: 'Typical 97–99%')),
                     const SizedBox(width: 10),
-                    Expanded(child: MetricCard(icon: Icons.thermostat_outlined, label: 'Temp', value: '${v.temperature.toStringAsFixed(1)}°', baseline: 'Your avg ${c.baseline.temperature.toStringAsFixed(1)}°')),
+                    Expanded(child: MetricCard(icon: Icons.thermostat_outlined, label: 'Body temp', value: '${v.temperature.toStringAsFixed(1)}°', baseline: 'Baseline ${c.baseline.temperature.toStringAsFixed(1)}°')),
                   ],
                 ),
                 const SizedBox(height: 10),
                 Row(
                   children: [
                     Expanded(child: MetricCard(icon: Icons.favorite_outline, label: 'Heart rate', value: '${v.heartRate} bpm', baseline: 'Baseline ${c.baseline.heartRate.round()} bpm')),
+                    const SizedBox(width: 10),
+                    Expanded(child: MetricCard(icon: Icons.device_thermostat_outlined, label: 'Heat index', value: '32.8°', baseline: 'Local conditions')),
                   ],
                 ),
                 const SizedBox(height: 14),
@@ -540,8 +559,8 @@ class DashboardPage extends StatelessWidget {
 // AI INSIGHT
 // -----------------------------------------------------------------------------
 
-class InsightPage extends StatelessWidget {
-  const InsightPage({super.key});
+class AlertsPage extends StatelessWidget {
+  const AlertsPage({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -552,7 +571,7 @@ class InsightPage extends StatelessWidget {
     return SafeArea(
       child: CustomScrollView(
         slivers: [
-          const SliverToBoxAdapter(child: PageHeader(title: 'AI Insight', subtitle: 'On-device risk analysis')),
+          const SliverToBoxAdapter(child: PageHeader(title: 'Alerts', subtitle: 'Public safety and local conditions')),
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(18, 6, 18, 24),
             sliver: SliverList(
@@ -564,7 +583,7 @@ class InsightPage extends StatelessWidget {
                       const CelestialLogo(size: 74),
                       const SizedBox(height: 16),
                       Text(
-                        p?.headline ?? 'Analyzing your signals…',
+                        p?.headline ?? 'Monitoring your live signals…',
                         textAlign: TextAlign.center,
                         style: const TextStyle(
                           fontFamily: 'Georgia',
@@ -575,7 +594,7 @@ class InsightPage extends StatelessWidget {
                       ),
                       const SizedBox(height: 10),
                       const Text(
-                        'Your AI compares current signals against your personal baseline rather than a population average.',
+                        'Local safety alerts and your live vitals are shown together so you can act before conditions worsen.',
                         textAlign: TextAlign.center,
                         style: TextStyle(color: VitalsColors.muted, fontSize: 12, height: 1.5),
                       ),
@@ -599,10 +618,19 @@ class InsightPage extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const SectionTitle(icon: Icons.insights_outlined, title: 'Key factors'),
+                        const SectionTitle(icon: Icons.warning_amber_outlined, title: 'Government alerts'),
                         const SizedBox(height: 8),
-                        ...p.factors.map(
-                          (factor) => FactorRow(factor: factor),
+                        const PublicAlertRow(
+                          title: 'Heatwave advisory',
+                          source: 'District disaster management authority',
+                          detail: 'Stay hydrated, limit outdoor exposure from 12:00–16:00.',
+                          severity: 'HIGH',
+                        ),
+                        const PublicAlertRow(
+                          title: 'Air quality notice',
+                          source: 'National air quality feed',
+                          detail: 'Reduce prolonged outdoor activity while the index is elevated.',
+                          severity: 'WATCH',
                         ),
                       ],
                     ),
@@ -616,7 +644,7 @@ class InsightPage extends StatelessWidget {
                       SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          'Powered by on-device AI. Sensor data used for prediction can remain on the watch instead of being sent to the cloud.',
+                          'Core vitals tracking remains on-device. Government alerts require a network feed and show the source and last sync time.',
                           style: TextStyle(color: VitalsColors.muted, fontSize: 11, height: 1.5),
                         ),
                       ),
@@ -625,7 +653,7 @@ class InsightPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
                 const Text(
-                  'Risk status is informational and is not a medical diagnosis.',
+                  'Alerts are informational. Follow official emergency guidance and seek help when required.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: VitalsColors.muted, fontSize: 10),
                 ),
@@ -659,7 +687,7 @@ class _TrendsPageState extends State<TrendsPage> {
     return SafeArea(
       child: CustomScrollView(
         slivers: [
-          const SliverToBoxAdapter(child: PageHeader(title: 'Trends', subtitle: 'Personal history')),
+          const SliverToBoxAdapter(child: PageHeader(title: 'Patterns', subtitle: 'Vitals and environment over time')),
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(18, 4, 18, 20),
             sliver: SliverList(
@@ -716,7 +744,7 @@ class SettingsPage extends StatelessWidget {
     return SafeArea(
       child: CustomScrollView(
         slivers: [
-          const SliverToBoxAdapter(child: PageHeader(title: 'Settings', subtitle: 'Your Vitals system')),
+          const SliverToBoxAdapter(child: PageHeader(title: 'Settings', subtitle: 'Accessibility and monitoring')),
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(18, 4, 18, 24),
             sliver: SliverList(
@@ -737,12 +765,13 @@ class SettingsPage extends StatelessWidget {
                 SettingsTile(icon: Icons.shield_outlined, title: 'Security', onTap: () {}),
                 SettingsTile(icon: Icons.watch_outlined, title: 'Device', onTap: () {}),
                 SettingsTile(icon: Icons.notifications_none, title: 'Notifications', onTap: () {}),
-                SettingsTile(icon: Icons.auto_awesome_outlined, title: 'AI & Personalization', onTap: () {}),
+                SettingsTile(icon: Icons.public_outlined, title: 'Government alert sources', onTap: () {}),
                 SettingsTile(icon: Icons.help_outline, title: 'Help & Support', onTap: () {}),
+                ThemeModeTile(),
                 const SizedBox(height: 20),
                 const SectionCard(
                   child: Text(
-                    'Vitals\nA healthier tomorrow, predicted today.',
+                    'Vitals\nLive signals. Local conditions. Earlier action.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontFamily: 'Georgia',
@@ -793,6 +822,16 @@ class PageHeader extends StatelessWidget {
             ],
           ),
           const Spacer(),
+          Builder(
+            builder: (context) {
+              final shell = context.findAncestorStateOfType<_HomeShellState>();
+              return IconButton(
+                tooltip: shell?.dayMode == true ? 'Switch to night theme' : 'Switch to day theme',
+                onPressed: shell?.toggleDayMode,
+                icon: Icon(shell?.dayMode == true ? Icons.dark_mode_outlined : Icons.light_mode_outlined, color: VitalsColors.ivory),
+              );
+            },
+          ),
           IconButton(
             tooltip: 'Notifications',
             onPressed: () {
@@ -830,6 +869,98 @@ class SectionCard extends StatelessWidget {
         border: Border.all(color: VitalsColors.border),
       ),
       child: child,
+    );
+  }
+}
+
+class RealTimeTrackerCard extends StatelessWidget {
+  const RealTimeTrackerCard({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return SectionCard(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+      child: Row(
+        children: [
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              SizedBox(width: 38, height: 38, child: CircularProgressIndicator(value: .78, strokeWidth: 3, backgroundColor: VitalsColors.border, valueColor: const AlwaysStoppedAnimation(VitalsColors.sage))),
+              const Icon(Icons.radar_outlined, size: 18, color: VitalsColors.ivory),
+            ],
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('All-time real-time tracker', style: TextStyle(fontFamily: 'Georgia', fontSize: 16, color: VitalsColors.ivory)),
+                SizedBox(height: 3),
+                Text('Recording since 08:42 · last signal 4 seconds ago', style: TextStyle(color: VitalsColors.muted, fontSize: 10)),
+              ],
+            ),
+          ),
+          const Text('LIVE', style: TextStyle(color: VitalsColors.sage, fontSize: 9, letterSpacing: 1.2)),
+        ],
+      ),
+    );
+  }
+}
+
+class PublicAlertRow extends StatelessWidget {
+  final String title;
+  final String source;
+  final String detail;
+  final String severity;
+
+  const PublicAlertRow({super.key, required this.title, required this.source, required this.detail, required this.severity});
+
+  @override
+  Widget build(BuildContext context) {
+    final high = severity == 'HIGH';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(high ? Icons.warning_amber_rounded : Icons.info_outline, color: high ? VitalsColors.warning : VitalsColors.sage, size: 19),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [Expanded(child: Text(title, style: const TextStyle(color: VitalsColors.ivory, fontSize: 12))), Text(severity, style: TextStyle(color: high ? VitalsColors.warning : VitalsColors.sage, fontSize: 9, letterSpacing: 1.1))]),
+                const SizedBox(height: 3),
+                Text(source, style: const TextStyle(color: VitalsColors.muted, fontSize: 9)),
+                const SizedBox(height: 3),
+                Text(detail, style: const TextStyle(color: VitalsColors.muted, fontSize: 10, height: 1.4)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class ThemeModeTile extends StatelessWidget {
+  const ThemeModeTile({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final shell = context.findAncestorStateOfType<_HomeShellState>();
+    final dayMode = shell?.dayMode ?? false;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: SectionCard(
+        padding: EdgeInsets.zero,
+        child: ListTile(
+          leading: Icon(dayMode ? Icons.light_mode_outlined : Icons.dark_mode_outlined, color: VitalsColors.gold),
+          title: const Text('Day / night accessibility theme', style: TextStyle(color: VitalsColors.ivory, fontSize: 13)),
+          subtitle: Text(dayMode ? 'Day: beige-black' : 'Night: dark navy-silver', style: const TextStyle(color: VitalsColors.muted, fontSize: 10)),
+          trailing: Switch(value: dayMode, onChanged: shell == null ? null : (_) => shell.toggleDayMode()),
+        ),
+      ),
     );
   }
 }
@@ -1146,7 +1277,7 @@ class AiPreviewCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SectionTitle(icon: Icons.auto_awesome, title: 'AI Insight'),
+          const SectionTitle(icon: Icons.monitor_heart_outlined, title: 'Live signal summary'),
           const SizedBox(height: 12),
           Text(
             prediction?.headline ?? 'Analyzing your signals…',
@@ -1515,7 +1646,7 @@ class AiLearningCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('AI explains your pattern', style: TextStyle(fontFamily: 'Georgia', fontSize: 17, color: VitalsColors.ivory)),
+                const Text('Signal interpretation', style: TextStyle(fontFamily: 'Georgia', fontSize: 17, color: VitalsColors.ivory)),
                 const SizedBox(height: 7),
                 Text(message, style: const TextStyle(color: VitalsColors.muted, fontSize: 11, height: 1.5)),
                 const SizedBox(height: 10),
@@ -1526,7 +1657,7 @@ class AiLearningCard extends StatelessWidget {
                     );
                   },
                   icon: const Icon(Icons.menu_book_outlined, size: 16),
-                  label: const Text('Learn more about your signals'),
+                  label: const Text('Learn more about this pattern'),
                   style: TextButton.styleFrom(foregroundColor: VitalsColors.gold, padding: EdgeInsets.zero),
                 ),
               ],

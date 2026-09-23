@@ -1,6 +1,6 @@
 # Vitals Flutter
 
-Vitals is a secure, AI-powered personal health companion prototype. It presents live wearable signals, compares them with an individual's personal baseline, and highlights current risk status before a pattern becomes an emergency.
+Vitals is a secure, real-time monitoring prototype. It presents live wearable signals, environmental conditions, public safety alerts, and current risk status before a pattern becomes an emergency.
 
 The experience is designed for continuous, privacy-preserving support during everyday conditions and disruption events such as heat waves, pollution events, floods, and other disasters common in India. The current project uses local demonstration data and a replaceable demo inference engine.
 
@@ -27,17 +27,15 @@ flutter run -d <device-id>
 ## Product experience
 
 - Email and password demo authentication.
-- Current risk status instead of a wellness score.
-- Personal baseline comparison for heart rate, HRV, temperature, and oxygen saturation.
+- Live vitals dashboard for heart rate, HRV, body temperature, and oxygen saturation.
+- Personal baseline comparison and an all-time real-time tracker.
 - Wearable connection status with live-monitoring language.
-- On-device risk analysis with confidence and explainable factors.
-- Notification affordance for high-risk monitoring alerts.
-- Trends for heart rate and HRV over 7, 30, and 90 day views.
-- Environment context in Trends: air-quality history, heat index, flood alerts, and offline-reading continuity.
-- Personalized AI explanation below Trends that encourages the individual to learn more about their own signals.
-- Settings entry points for account, security, device, notifications, and AI personalization.
+- Patterns page for heart rate, HRV, air quality, heat index, flood alerts, and offline-reading continuity.
+- Alerts page for heatwaves, harmful local conditions, government sources, and current risk status.
+- Day/night accessibility switch: beige-black day mode and dark navy-silver night mode.
+- Settings entry points for account, device, alert sources, notifications, and accessibility.
 
-This is a monitoring device, not a wellness device. Sleep, stress, breathing, and blood-pressure tracking are intentionally outside this version's scope.
+This is a monitoring device, not a wellness device. Sleep, stress, breathing, blood-pressure tracking, and wellness scoring are intentionally outside this version's scope.
 
 ## Architecture
 
@@ -46,9 +44,11 @@ This is a monitoring device, not a wellness device. Sleep, stress, breathing, an
 - `PersonalBaseline`: represents the individual's expected signal range.
 - `OnDeviceRiskEngine`: replaceable interface for native or hardware inference.
 - `DemoOnDeviceRiskEngine`: deterministic rule-based demo inference using heart rate, HRV, oxygen saturation, and temperature deviation.
-- UI screens: Login, Dashboard, Trends, AI Insight, and Settings.
+- UI screens: Login, Live Vitals, Patterns, Alerts, and Settings.
 - `RiskStatusCard` and `WearableStatusCard`: make the dashboard useful for live risk monitoring.
-- `AiLearningCard`: explains the most relevant personal pattern below the trend charts.
+- `RealTimeTrackerCard`: communicates continuous monitoring and signal recency.
+- `PublicAlertRow`: presents government or external hazard messages with source and severity.
+- `ThemeModeTile`: switches between the accessible day and night palettes.
 - `MiniChartPainter`, `CelestialPainter`, and `StarfieldPainter`: provide the visual system without image dependencies.
 - `EarlyWarningCard`: combines current risk status with heat, pollution-feed, and flood-continuity readiness.
 
@@ -76,7 +76,7 @@ Stream<VitalsSnapshot> watchVitalsStream();
 
 The UI should subscribe to this stream and update risk analysis automatically as readings arrive. Manual prediction reruns are not part of the current real-time product flow.
 
-### On-device AI
+### On-device risk analysis
 
 Implement the existing inference interface with TensorFlow Lite/LiteRT, ONNX Runtime, native C/C++ through FFI, or a wearable NPU/DSP runtime:
 
@@ -86,7 +86,11 @@ class HardwareRiskEngine implements OnDeviceRiskEngine {
 }
 ```
 
-The production model should return a risk score, confidence, explainable factors, and an appropriate alert level. It should not present a medical diagnosis.
+The production model should return a risk score, confidence, explainable factors, and an appropriate alert level. It should not present a medical diagnosis or a wellness score.
+
+### Government and environment feeds
+
+Replace the demonstration alert rows and environment history with trusted feeds from the relevant local or national authorities. Each alert should show its source, severity, last synchronization time, and whether the device is operating from cached data during a connectivity outage.
 
 ### Personal baseline
 
@@ -101,4 +105,4 @@ flutter analyze
 flutter test
 ```
 
-The current widget test verifies that the Vitals login screen loads. Additional tests should cover risk scoring, baseline comparisons, wearable disconnection, notification states, and the 7/30/90 day trend selection.
+The current widget test verifies that the Vitals login screen loads. Additional tests should cover risk scoring, baseline comparisons, wearable disconnection, day/night accessibility, government alert rendering, notification states, and the 7/30/90 day pattern selection.
